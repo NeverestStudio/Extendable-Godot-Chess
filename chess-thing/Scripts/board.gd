@@ -54,6 +54,69 @@ func next_turn():
 		if check_checkmate(current_turn * -1):
 			print("checkmate")
 			current_turn = 0
+	else:
+		if check_stalemate(current_turn * -1):
+			print("stalemate")
+			current_turn = 0
+	current_turn *= -1
+
+# Check if a team is in stalemate
+func check_stalemate(team) -> bool:
+	# Iterate through every piece belonging to the team
+	for piece in pieces:
+		if piece.team == team:
+			if has_valid_move(piece):
+				return false
+	
+	return true
+
+func has_valid_move(piece) -> bool:
+	var original_pos = piece.util_position
+	
+	# 1. Test Movement Rules
+	var moves = generate_legal_moves(piece)
+	for move in moves:
+		if simulate_move_safety(piece, move, null):
+			return true # Found a safe move
+			
+	# 2. Test Capture Rules
+	var takes = generate_legal_takes(piece)
+	for take in takes:
+		var target = probe_cell(take)
+		if target and simulate_move_safety(piece, take, target):
+			return true # Found a safe capture
+
+	return false
+
+# Simulates a move, checks for check, and reverts the state
+func simulate_move_safety(piece, dest_cell, captured_target) -> bool:
+	var original_pos = piece.util_position
+	var team = piece.team
+	
+	
+	# 1. Temporarily remove captured piece from board array so it doesn't generate threats
+	if captured_target:
+		pieces.erase(captured_target)
+		
+	# 2. Move the piece virtually (only data, not visuals)
+	piece.util_position = dest_cell
+	
+	# 3. Calculate enemy threats in this hypothetical future
+	var enemy_map = calculate_threat_map(team * -1)
+	
+	# 4. Check if we are dead
+	var is_safe = not check_check(team, enemy_map)
+	
+	# --- REVERT ---
+	
+	# 1. Move piece back
+	piece.util_position = original_pos
+	
+	# 2. Put captured piece back
+	if captured_target:
+		pieces.append(captured_target)
+		
+	return is_safe
 	
 	# Switch turns
 	current_turn *= -1
@@ -407,8 +470,7 @@ func generate_legal_moves(piece):
 	
 	# Kings need to avoid threatened squares
 	if piece.essential:
-		threat_map = calculate_threat_map(current_turn * -1)
-	
+		threat_map = calculate_threat_map(piece.team*-1)
 	for rule in move_rules:
 		# Check conditional rules
 		if "condition" in rule:
